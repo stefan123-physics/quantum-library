@@ -128,6 +128,7 @@ function route() {
     if (currentReader && currentReader.doc === doc && currentReader.split === (params.get('split') === '1')) {
       if (params.get('at')) currentReader.goToHeading(page, +params.get('at'));
       else currentReader.goTo(page);
+      if (params.get('listen')) currentReader.listenFrom(page, +params.get('at') || 0);
       if (params.get('q')) currentReader.find(params.get('q'), false);
       return;
     }
@@ -149,8 +150,9 @@ function go(hash) {
   if (location.hash === hash) route();
   else location.hash = hash;
 }
-const readHash = (doc, page, q, split, at) => {
-  const qs = new URLSearchParams({ ...(q ? { q } : {}), ...(split ? { split: '1' } : {}), ...(at ? { at } : {}) }).toString();
+// listen = open the book and start reading aloud right away
+const readHash = (doc, page, q, split, at, listen) => {
+  const qs = new URLSearchParams({ ...(q ? { q } : {}), ...(split ? { split: '1' } : {}), ...(at ? { at } : {}), ...(listen ? { listen: '1' } : {}) }).toString();
   return `#/read/${doc.id}/${page}` + (qs ? '?' + qs : '');
 };
 
@@ -184,6 +186,7 @@ function renderHome() {
       <p class="lead">${esc(t('home.hero.sub', { topics: main.topics.length, domains: domainsUsed.size }))}</p>
       <div class="cta">
         <a class="btn primary" href="${readHash(main, prog.last || 1)}">${esc(prog.visited.length ? t('home.cta.continue', { page: prog.last }) : t('home.cta.read'))} →</a>
+        <a class="btn listen" data-listen href="${readHash(main, prog.last || 1, undefined, false, undefined, true)}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/></svg> ${esc(t('home.cta.listen'))}</a>
         <button class="btn" data-act="random">⚛ ${esc(t('home.cta.random'))}</button>
         <button class="btn ghost" data-act="search">⌕ ${esc(t('home.cta.search'))} <kbd>Ctrl K</kbd></button>
       </div>
@@ -215,6 +218,7 @@ function renderHome() {
               <p class="muted small">${esc(t('doc.progress', { pct }))}</p>
               <div class="row">
                 <a class="btn small primary" href="${readHash(d, p.last || 1)}">${esc(t('doc.open'))}</a>
+                <a class="btn small listen" data-listen href="${readHash(d, p.last || 1, undefined, false, undefined, true)}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/></svg> ${esc(t('home.cta.listen'))}</a>
                 <a class="btn small" href="${esc(d.file)}" download>${esc(t('doc.download'))} ↓</a>
               </div>
             </div>
@@ -226,7 +230,10 @@ function renderHome() {
         ${domainChip(daily.domain)}
         <h3>${esc(daily.title)}</h3>
         <p class="mono muted">p. ${daily.page}</p>
-        <a class="btn small primary" href="${readHash(main, daily.page, undefined, false, daily.at)}">${esc(t('doc.open'))} →</a>
+        <div class="row">
+          <a class="btn small primary" href="${readHash(main, daily.page, undefined, false, daily.at)}">${esc(t('doc.open'))} →</a>
+          <a class="btn small listen" data-listen href="${readHash(main, daily.page, undefined, false, daily.at, true)}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/></svg> ${esc(t('home.cta.listen'))}</a>
+        </div>
         <svg class="wave-deco" viewBox="0 0 200 40" aria-hidden="true"><path d="M0 20 Q 12.5 0 25 20 T 50 20 T 75 20 T 100 20 T 125 20 T 150 20 T 175 20 T 200 20"/></svg>
       </article>
     </div>
@@ -338,7 +345,8 @@ function renderTopics(params) {
             <span class="tl-body"><span class="tl-title">${highlight(x.title, terms)}</span>
             ${x.children.length ? `<span class="tl-sub">${x.children.map((c) => esc(c.title)).join(' · ')}</span>` : ''}</span>
             <span class="tl-page mono">${visited.has(x.page) ? `<span class="seen" title="${esc(t('topics.visited'))}">✓</span>` : ''}p.${x.page}</span>
-          </a></li>`,
+          </a>
+          <a class="tl-listen" data-listen href="${readHash(doc, x.page, undefined, false, x.at, true)}" title="${esc(t('topics.listen'))}" aria-label="${esc(t('topics.listen'))}: ${esc(x.title)}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/></svg></a></li>`,
           )
           .join('')
       : `<li class="empty">${esc(t('palette.empty'))}</li>`;
@@ -646,6 +654,7 @@ class Reader {
     this.#buildContents();
     this.#buildThumbs();
     this.#buildMarks();
+    this.listenOnOpen = params.get('listen') === '1';
     this.#openPanes(page, +params.get('at') || 0);
     this.#setupReadAloud();
     if (this.query) this.find(this.query);
@@ -798,6 +807,7 @@ class Reader {
       .open(page)
       .then(() => at && this.a.goToFraction(page, Math.max(0, at - 0.025)))
       .then(() => store.settings.textMode && this.toggleTextView(true))
+      .then(() => this.listenOnOpen && this.listenFrom(page, at))
       .catch((err) => this.#fail(err));
     this.root.querySelector('#r-total').textContent = t('reader.of', { n: this.doc.numPages });
     if (this.split) {
@@ -1120,6 +1130,13 @@ class Reader {
     unlockSpeech();
     if (page !== undefined) return this.ra.start(page, index);
     this.#startFromView();
+  }
+
+  // Opened through a "Read aloud" link: start at the heading (or the top of the page).
+  async listenFrom(page, at = 0) {
+    const units = await this.ra.units(page);
+    const index = Math.max(0, units.findIndex((u) => u.boxes.some((b) => b[3] >= at - 0.01)));
+    this.ra.start(page, index);
   }
 
   // Begin with the first sentence at the reading position (35% down the view).
@@ -1509,6 +1526,9 @@ function openHelp() {
   help.showModal();
 }
 help.addEventListener('click', (e) => (e.target === help || e.target.closest('.help-close')) && help.close());
+
+// "Read aloud" links elsewhere in the site: iOS only allows speech that starts inside the tap.
+document.addEventListener('click', (e) => e.target.closest?.('[data-listen]') && unlockSpeech(), true);
 
 // Close an open ⋯ menu when tapping anywhere else (or pressing Escape).
 document.addEventListener('click', (e) => {

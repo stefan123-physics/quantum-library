@@ -908,3 +908,28 @@ h1, h2, h3, .tl-title, .dt-name, .doc-meta h3, .daily-card h3, .toc-item button 
 .text-mode .ra-caption { display: none; }
 
 .update-toast { pointer-events: auto; cursor: pointer; font: 600 .9rem var(--font-sans); color: var(--accent); }
+
+/* "Read aloud" links outside the reader */
+.btn .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.btn.listen { border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; }
+.btn.listen:hover { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.topic-list li { display: flex; gap: 8px; align-items: stretch; }
+.topic-list li > a:first-child { flex: 1; min-width: 0; }
+.tl-listen {
+  flex: none; width: 52px; display: grid; place-items: center; border-radius: 12px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: background .2s, transform .2s var(--ease);
+}
+.tl-listen:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); transform: scale(1.04); }
+.tl-listen svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.daily-card .row { margin-top: auto; }
+.daily-card .row .btn { margin-top: 0; }
+@media (max-width: 640px) { .tl-listen { width: 46px; } }
+/* bottom nav must fit longer (Dutch) labels on small phones */
+@media (max-width: 900px) {
+  body:not(.in-reader) .nav { width: max-content; justify-content: center; }
+}
+@media (max-width: 420px) {
+  body:not(.in-reader) .nav { padding: 4px; gap: 0; }
+  body:not(.in-reader) .nav a { padding: 7px 8px; font-size: .78rem; }
+}

@@ -25,6 +25,14 @@ const toItalic = (s) =>
     })
     .join('');
 
+// LaTeX accents arrive as a separate mark before the letter: "co¨effici¨ent" → "coëfficiënt".
+const foldAccents = (s) =>
+  s
+    .replace(/\s*¨\s*([aeiouyAEIOUYı])/g, (_, v) => (v === 'ı' ? 'i' : v) + '\u0308')
+    .replace(/\s*`\s*([aeiouAEIOU])/g, (_, v) => v + '\u0300')
+    .replace(/\s*´\s*([aeiouAEIOU])/g, (_, v) => v + '\u0301')
+    .normalize('NFC');
+
 const FIGURE_RE = /^(\d+\.\s*)?(diagram|illustrati|afbeelding|visuali[sz]|ray diagram|stralendiagram|graphical representation|grafische voorstelling|circuit diagram|circuitschema|schakelschema|schema)\b/i;
 
 function fontKind(name = '') {
@@ -215,7 +223,7 @@ export async function pageSegments(page) {
       out += t;
       prevEnd = Math.max(it.x + it.w, it.scriptEnd ?? -Infinity);
     }
-    return out.replace(/\s+/g, ' ').trim();
+    return foldAccents(out.replace(/\s+/g, ' ').trim());
   }
 
   const segs = [];
