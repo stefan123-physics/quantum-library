@@ -864,11 +864,12 @@ h1, h2, h3, .tl-title, .dt-name, .doc-meta h3, .daily-card h3, .toc-item button 
 .spin { animation: spin 1s linear infinite; }
 
 .speak-hl {
-  position: absolute; z-index: 2; pointer-events: none; border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
-  mix-blend-mode: multiply; animation: hl-in .25s var(--ease);
+  /* a highlighter pen: soft yellow, multiplied into the page so the text stays crisp */
+  position: absolute; z-index: 2; pointer-events: none; border-radius: 3px;
+  background: rgba(255, 213, 0, .42); mix-blend-mode: multiply;
+  animation: hl-in .3s var(--ease);
 }
-.night .speak-hl { mix-blend-mode: screen; background: rgba(56, 189, 248, .28); }
+.night .speak-hl { background: rgba(255, 213, 0, .3); mix-blend-mode: screen; }
 @keyframes hl-in { from { opacity: 0; } }
 .reading .pane-pages { padding-bottom: 200px; }
 

@@ -231,7 +231,7 @@ export class Pane {
     for (const [l, t, r, b] of boxes) {
       const d = document.createElement('div');
       d.className = 'speak-hl';
-      d.style.cssText = `left:${(l - 0.006) * 100}%;top:${(t - 0.004) * 100}%;width:${(r - l + 0.012) * 100}%;height:${(b - t + 0.008) * 100}%`;
+      d.style.cssText = `left:${(l - 0.003) * 100}%;top:${(t - 0.0012) * 100}%;width:${(r - l + 0.006) * 100}%;height:${(b - t + 0.0024) * 100}%`;
       p.appendChild(d);
       first ||= d;
     }

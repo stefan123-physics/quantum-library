@@ -1128,12 +1128,14 @@ class Reader {
     }
     if (page === undefined && st === 'loading') return this.ra.stop();
     unlockSpeech();
+    window.getSelection()?.removeAllRanges(); // a text selection would look like a second highlight
     if (page !== undefined) return this.ra.start(page, index);
     this.#startFromView();
   }
 
   // Opened through a "Read aloud" link: start at the heading (or the top of the page).
   async listenFrom(page, at = 0) {
+    window.getSelection()?.removeAllRanges();
     const units = await this.ra.units(page);
     const index = Math.max(0, units.findIndex((u) => u.boxes.some((b) => b[3] >= at - 0.01)));
     this.ra.start(page, index);

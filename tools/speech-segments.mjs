@@ -214,22 +214,46 @@ export async function pageSegments(page) {
     for (const sc of it.scripts || []) s = s.replace(/\s+$/, '') + (sc.up ? `^{${sc.t.trim()}}` : `_{${sc.t.trim()}}`);
     return s;
   };
-  function runText(its) {
+  // Joins a line's glyph runs left to right. With `runs`, records where each run's characters sit
+  // horizontally — [start, end, x0, x1] — so read-aloud can highlight exactly one sentence.
+  function runText(its, runs) {
+    const sorted = [...its].sort((a, b) => a.x - b.x);
+    // A LaTeX accent is its own glyph run just before its letter ("co" "¨" "effici"): merge it into the
+    // run after it, so folding it into "ë" never shifts the character positions.
+    const merged = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const it = sorted[i];
+      const next = sorted[i + 1];
+      const mark = !it.frac && next && !next.frac && /([¨`´])\s*$/.exec(it.s);
+      if (mark) {
+        // the accent belongs to the first letter of the next run
+        sorted[i + 1] = { ...next, s: mark[1] + next.s.replace(/^\s+/, '') };
+        const rest = it.s.slice(0, mark.index);
+        if (rest.trim()) merged.push({ ...it, s: rest });
+        continue;
+      }
+      merged.push(it);
+    }
     let out = '';
     let prevEnd = null;
-    for (const it of [...its].sort((a, b) => a.x - b.x)) {
-      const t = itemText(it);
-      if (prevEnd !== null && it.x - prevEnd > 1.6 && !/\s$/.test(out) && !/^\s/.test(t)) out += ' ';
+    for (const it of merged) {
+      let t = foldAccents(itemText(it)).replace(/\s+/g, ' ');
+      if (!out) t = t.replace(/^ /, '');
+      if (prevEnd !== null && it.x - prevEnd > 1.6 && !out.endsWith(' ') && !t.startsWith(' ')) out += ' ';
+      if (out.endsWith(' ') && t.startsWith(' ')) t = t.slice(1);
+      const start = out.length;
       out += t;
+      runs?.push([start, out.length, it.x, Math.max(it.x + it.w, it.scriptEnd ?? -Infinity)]);
       prevEnd = Math.max(it.x + it.w, it.scriptEnd ?? -Infinity);
     }
-    return foldAccents(out.replace(/\s+/g, ' ').trim());
+    return out.replace(/\s+$/, '');
   }
 
   const segs = [];
   let inFigure = false;
   for (const L of lines.filter((l) => !l.dead && l.items.length).sort((a, b) => b.y - a.y)) {
-    const text = runText(L.items);
+    const runs = [];
+    const text = runText(L.items, runs);
     if (!text) continue;
     const x0 = Math.min(...L.items.map((i) => i.x));
     const x1 = Math.max(...L.items.map((i) => i.x + i.w));
@@ -259,6 +283,8 @@ export async function pageSegments(page) {
       k,
       t: text,
       b: [x0 / W, 1 - top / H, x1 / W, 1 - bottom / H].map((v) => +Math.min(1, Math.max(0, v)).toFixed(4)),
+      // character runs with their horizontal position (page fractions), for sentence-exact highlighting
+      r: runs.filter(([a, b2]) => b2 > a).map(([a, b2, rx0, rx1]) => [a, Math.min(b2, text.length), +(rx0 / W).toFixed(4), +(rx1 / W).toFixed(4)]),
     });
   }
   return segs;

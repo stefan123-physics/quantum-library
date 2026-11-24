@@ -12,6 +12,32 @@ export function loadSpeechData(doc) {
 }
 
 const OPERATOR = /[=≈⇒→∝≤≥<>]/;
+
+// x position (page fraction) of character c of a line, from its glyph runs [start, end, x0, x1]
+function xAt(runs, c, edge) {
+  let best = runs[0];
+  for (const r of runs) {
+    if (c >= r[0] && c < r[1]) {
+      best = r;
+      break;
+    }
+    if (r[0] <= c) best = r;
+  }
+  const [s, e, x0, x1] = best;
+  const f = Math.min(1, Math.max(0, (c - s + (edge ? 1 : 0)) / Math.max(1, e - s)));
+  return x0 + (x1 - x0) * f;
+}
+
+// The box of the characters [a, b) of a paragraph on one of its lines (span = that line).
+function sentenceBox(span, a, b) {
+  if (!span.r?.length) return span.b;
+  const from = Math.max(a, span.start) - span.start;
+  const to = Math.min(b, span.end) - span.start;
+  if (from <= 0 && to >= span.end - span.start) return span.b;
+  const l = from <= 0 ? span.b[0] : xAt(span.r, from, false);
+  const r = to >= span.end - span.start ? span.b[2] : xAt(span.r, to - 1, true);
+  return [l, span.b[1], Math.max(l + 0.005, r), span.b[3]];
+}
 const wordCount = (t) => (t.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length;
 
 /** Units of one page: [{ kind: 'h'|'m'|'p', show, say, boxes, para }] */
@@ -37,7 +63,7 @@ export function pageUnits(segs, lang) {
         start = text.length;
         text += t;
       }
-      spans.push({ start, end: text.length, b: line.b });
+      spans.push({ start, end: text.length, b: line.b, r: line.r });
     }
     // sentences: split after . ! ? or : followed by a space and a new sentence (never inside 1.98)
     const cuts = [0];
@@ -46,11 +72,14 @@ export function pageUnits(segs, lang) {
     while ((m = re.exec(text))) cuts.push(m.index + 1);
     cuts.push(text.length);
     for (let i = 0; i < cuts.length - 1; i++) {
-      const a = cuts[i];
-      const b = cuts[i + 1];
-      const show = text.slice(a, b).trim();
+      let a = cuts[i];
+      let b = cuts[i + 1];
+      while (a < b && /\s/.test(text[a])) a++;
+      while (b > a && /\s/.test(text[b - 1])) b--;
+      const show = text.slice(a, b);
       if (!show) continue;
-      const boxes = spans.filter((s) => s.start < b && s.end > a).map((s) => s.b);
+      // only the part of each line this sentence covers, so neighbouring sentences never overlap
+      const boxes = spans.filter((s) => s.start < b && s.end > a).map((s) => sentenceBox(s, a, b));
       units.push({ kind: 'p', show, say: mathToSpeech(show, lang, { symbols, prose: true }), boxes, para });
     }
     buf = [];
