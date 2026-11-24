@@ -1368,9 +1368,35 @@ function setupInstall() {
       show(false);
     } else toast(t('install.ios'));
   });
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') setupUpdates();
+}
+
+// New versions arrive by themselves: check for one when the app comes back into view (and every
+// half hour), and once the new version has taken over, reload — unless read-aloud is busy, then ask.
+function setupUpdates() {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker
+    .register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+      setInterval(check, 30 * 60 * 1000);
+    })
+    .catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return; // first install: nothing old to replace
+    reloading = true;
+    if (currentReader?.ra && currentReader.ra.state !== 'idle') {
+      const el = document.createElement('button');
+      el.className = 'toast show update-toast';
+      el.textContent = t('update.ready');
+      el.onclick = () => location.reload();
+      document.getElementById('toasts').appendChild(el);
+      return;
+    }
+    location.reload();
+  });
 }
 
 /* --------------------------------------------------------------- palette */
