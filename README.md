@@ -1,5 +1,9 @@
 # Quantum Library
 
+[![Quantum Library — every physics formula, one orbit away](og-image.png)](https://quantum-library-gamma.vercel.app/)
+
+**Live site: [quantum-library-gamma.vercel.app](https://quantum-library-gamma.vercel.app/)**
+
 A bilingual (English / Nederlands) reader for the physics-formula PDFs in this folder, with a
 physics-styled look, dark/light mode and a set of study tools. Pure static site: no framework,
 no backend. pdf.js is self-hosted in `vendor/`.
@@ -27,11 +31,11 @@ Opening `index.html` straight from disk (`file://`) does not work: browsers bloc
 
 While you read, the tab icon turns into a progress ring showing how far you are in the book.
 
-Most sites that show link previews (Facebook, LinkedIn, X) need absolute image URLs. Once you know
-the address the site will live at, run:
+Most sites that show link previews (Facebook, LinkedIn, X) need absolute image URLs, so the share
+tags point at the live site. If the address changes, re-run with the new one:
 
 ```bash
-SITE_URL=https://your-domain.example npm run build:icons
+SITE_URL=https://quantum-library-gamma.vercel.app npm run build:icons
 ```
 
 The site is an installable app (`manifest.webmanifest` + `sw.js`): "Install app" button on
