@@ -4,6 +4,7 @@ import { buildIndex, search, highlight, escapeHTML as esc } from './search.js';
 import { startBackground } from './bg.js';
 import { Pane, renderThumb } from './pdf.js';
 import { FORMULAS, CONSTANTS, UNITS, solve, fmt, parseNum, convert } from './lab.js';
+import { speakFallback, stopFallback } from './tts-fallback.js';
 
 /* ------------------------------------------------------------------ data */
 
@@ -1026,66 +1027,91 @@ class Reader {
 
   // Read aloud, sentence by sentence (Chrome silently stops utterances longer than ~15 s),
   // continuing onto the next pages until the user stops it with R or the button.
+  // Read aloud sentence by sentence (Chrome stops long utterances after ~15 s), continuing onto the
+  // next pages until stopped. Uses the browser's own voice when it has a working one for this
+  // language, otherwise the built-in meSpeak voice (vendor/mespeak), downloaded on first use.
   async speak(page = this.a.current) {
-    if (!('speechSynthesis' in window)) return toast(t('toast.noSpeech'));
     const session = (this.speakSession = (this.speakSession || 0) + 1);
     this.speaking = true;
     this.#speakUI(true);
-
-    const voices = await loadVoices();
-    if (session !== this.speakSession) return;
-    if (!voices.length) {
-      this.stopSpeaking();
-      return toast(t(speechHelpKey()));
-    }
     const lang = this.doc.lang;
-    const voice =
-      voices.find((v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang) && v.localService) ||
-      voices.find((v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang));
-    if (!voice) toast(t('toast.noVoiceLang', { lang: t('lang.' + lang) }));
 
-    // Chrome can swallow a speak() issued right after cancel(): only cancel when needed, then wait a tick.
-    if (speechSynthesis.speaking || speechSynthesis.pending) {
+    let voice = null;
+    if (ttsEngine !== 'builtin' && 'speechSynthesis' in window) {
+      const voices = await loadVoices();
+      if (session !== this.speakSession) return;
+      const match = (v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang);
+      voice = voices.find((v) => match(v) && v.localService) || voices.find(match) || null;
+    }
+    // no browser voice for this language → the built-in voice speaks both English and Dutch
+    let engine = ttsEngine === 'builtin' || !voice ? 'builtin' : 'native';
+    if (engine === 'builtin') toast(t('toast.fallbackVoice'));
+
+    if (engine === 'native' && (speechSynthesis.speaking || speechSynthesis.pending)) {
+      // Chrome can swallow a speak() issued right after cancel(): only cancel when needed, then wait a tick.
       speechSynthesis.cancel();
       await new Promise((r) => setTimeout(r, 120));
     }
+
     for (let p = page; p <= this.doc.numPages; p++) {
       if (session !== this.speakSession) return;
       if (p !== page) this.goTo(p);
       toast(t('toast.reading', { page: p }));
       for (const sentence of speakableSentences(this.doc.pages[p - 1] || '')) {
         if (session !== this.speakSession) return;
-        let started = false;
-        const ok = await new Promise((resolve) => {
-          const u = new SpeechSynthesisUtterance(sentence);
-          u.onstart = () => (started = true);
-          // Some engines accept the text but never start (e.g. a broken speech-dispatcher): detect it.
-          if (!this.speechVerified) {
-            setTimeout(() => {
-              if (!started && session === this.speakSession && !speechSynthesis.speaking) resolve('no-start');
-            }, 4000);
-          }
-          u.lang = lang === 'nl' ? 'nl-NL' : 'en-GB';
-          try {
-            if (voice) u.voice = voice;
-          } catch {
-            /* not a real SpeechSynthesisVoice */
-          }
-          u.onend = () => resolve(true);
-          u.onerror = (e) => resolve(e.error === 'interrupted' || e.error === 'canceled' ? true : e.error);
-          speechSynthesis.speak(u);
-        });
-        if (ok !== true) {
-          if (session === this.speakSession) {
-            this.stopSpeaking();
-            toast(ok === 'no-start' ? t(speechHelpKey()) : t('toast.speechError', { error: ok }));
-          }
-          return;
+        let ok = engine === 'builtin' ? await this.#sayBuiltin(sentence, lang) : await this.#sayNative(sentence, lang, voice, session);
+        if (session !== this.speakSession) return;
+        if (ok !== true && engine === 'native') {
+          // the browser's engine is broken (accepts text, never speaks): switch for good and retry
+          engine = ttsEngine = 'builtin';
+          toast(t('toast.fallbackVoice'));
+          ok = await this.#sayBuiltin(sentence, lang);
+          if (session !== this.speakSession) return;
         }
-        if (started) this.speechVerified = true;
+        if (ok !== true) {
+          this.stopSpeaking();
+          return toast(t('toast.speechError', { error: ok }) + ' ' + t(speechHelpKey()));
+        }
       }
     }
     if (session === this.speakSession) this.stopSpeaking();
+  }
+
+  #sayNative(sentence, lang, voice, session) {
+    return new Promise((resolve) => {
+      let started = false;
+      const u = new SpeechSynthesisUtterance(sentence);
+      u.lang = lang === 'nl' ? 'nl-NL' : 'en-GB';
+      try {
+        u.voice = voice;
+      } catch {
+        /* not a real SpeechSynthesisVoice */
+      }
+      u.onstart = () => {
+        started = true;
+        ttsEngine = 'native';
+      };
+      u.onend = () => resolve(true);
+      u.onerror = (e) => resolve(e.error === 'interrupted' || e.error === 'canceled' ? true : e.error);
+      // Some engines accept the text but never start (e.g. a broken speech-dispatcher): detect it.
+      if (ttsEngine !== 'native') {
+        setTimeout(() => {
+          if (!started && session === this.speakSession && !speechSynthesis.speaking) {
+            speechSynthesis.cancel();
+            resolve('no-start');
+          }
+        }, 3500);
+      }
+      speechSynthesis.speak(u);
+    });
+  }
+
+  async #sayBuiltin(sentence, lang) {
+    try {
+      return await speakFallback(sentence, lang);
+    } catch (err) {
+      return err?.message || 'built-in voice unavailable';
+    }
   }
 
   #speakUI(on) {
@@ -1097,6 +1123,7 @@ class Reader {
   stopSpeaking() {
     this.speakSession = (this.speakSession || 0) + 1; // invalidates the running reading loop
     if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+    stopFallback();
     this.speaking = false;
     this.#speakUI(false);
   }
@@ -1137,6 +1164,9 @@ function renderReader(doc, page, params) {
 }
 
 /* ------------------------------------------------------------ read aloud */
+
+// 'native' once the browser's own voice is proven to work, 'builtin' once we fell back to meSpeak.
+let ttsEngine = null;
 
 // Which help text fits this browser when speech does not work.
 function speechHelpKey() {

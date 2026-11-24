@@ -58,6 +58,9 @@ Drop PDFs in this folder and run `npm run build:index`. The builder:
   fit width/page, thumbnails, auto-generated contents grouped by field, current-topic bar with
   previous/next topic (`[` `]`), reading-progress bar, focus mode (`F`), read aloud (`R`),
   print, download, copy link to the exact page.
+- **Read aloud** (`R`) — sentence by sentence, continuing page after page. Uses the browser's
+  voice when it has one for the book's language; otherwise a built-in English/Dutch voice
+  (meSpeak, GPL-3.0, in `vendor/mespeak/`, downloaded only when needed).
 - **Side-by-side EN | NL** (`S`) with synchronised scrolling.
 - **Search everything** (Ctrl/⌘ K or `/`) — topics and full page text of both editions,
   with Dutch↔English synonyms (searching "wrijving" finds "friction"), fuzzy matching, snippets
