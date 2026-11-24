@@ -3,6 +3,7 @@
 import { readdir, writeFile, stat, mkdir, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { pageSegments } from './speech-segments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const files = (await readdir(ROOT)).filter((f) => f.toLowerCase().endsWith('.pdf')).sort();
@@ -115,6 +116,13 @@ for (const file of files) {
     if (!/[A-Za-zÀ-ÿ]{4,}/.test(title)) continue;
     topics.push({ title, page: h.page, at: h.at, children: [] });
   }
+
+  // Read-aloud / reading-mode lines with formula structure, one file per document (loaded on demand).
+  const speech = [];
+  for (let p = 1; p <= pdf.numPages; p++) speech.push(await pageSegments(await pdf.getPage(p)));
+  await mkdir(ROOT + 'data/speech', { recursive: true });
+  const docId = file.replace(/\.pdf$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  await writeFile(ROOT + `data/speech/${docId}.json`, JSON.stringify(speech));
 
   const { size } = await stat(ROOT + file);
   docs.push({

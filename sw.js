@@ -1,10 +1,11 @@
 // Service worker: makes the installed app open instantly and work offline.
 // - code & data (HTML, JS, CSS, JSON, manifest): network first, cached copy when offline
 // - PDFs, pdf.js, icons, fonts: served from cache, refreshed in the background
-const CACHE = 'quantum-library-v2';
+const CACHE = 'quantum-library-v3';
 const SHELL = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest', 'favicon.svg',
   'js/app.js', 'js/i18n.js', 'js/store.js', 'js/search.js', 'js/pdf.js', 'js/lab.js', 'js/bg.js',
+  'js/read-aloud.js', 'js/math-speech.js', 'js/voices.js', 'js/tts-fallback.js',
   'data/library.json', 'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];

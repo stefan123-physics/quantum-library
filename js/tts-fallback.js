@@ -33,10 +33,10 @@ export async function prepareFallback(lang) {
 }
 
 // Speak one piece of text; resolves true when finished (or stopped), or an error string.
-export async function speakFallback(text, lang) {
+export async function speakFallback(text, lang, rate = 1) {
   const l = await prepareFallback(lang);
   return new Promise((resolve) => {
-    const id = window.meSpeak.speak(text, { voice: VOICE_ID[l], speed: 160, pitch: 45, wordgap: 1 }, (ok) =>
+    const id = window.meSpeak.speak(text, { voice: VOICE_ID[l], speed: Math.round(160 * rate), pitch: 45, wordgap: 1 }, (ok) =>
       resolve(ok ? true : 'built-in voice failed'),
     );
     if (!id) resolve('built-in voice failed');

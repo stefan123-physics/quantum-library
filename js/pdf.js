@@ -222,6 +222,22 @@ export class Pane {
     return p ? (this.scroller.scrollTop + 12 - p.offsetTop) / p.offsetHeight : 0;
   }
 
+  // Highlight what read-aloud is saying: boxes are [left, top, right, bottom] as page fractions.
+  markSpeech(page, boxes) {
+    this.wrap.querySelectorAll('.speak-hl').forEach((e) => e.remove());
+    const p = page && this.pages[page - 1];
+    if (!p || !boxes?.length) return null;
+    let first = null;
+    for (const [l, t, r, b] of boxes) {
+      const d = document.createElement('div');
+      d.className = 'speak-hl';
+      d.style.cssText = `left:${(l - 0.006) * 100}%;top:${(t - 0.004) * 100}%;width:${(r - l + 0.012) * 100}%;height:${(b - t + 0.008) * 100}%`;
+      p.appendChild(d);
+      first ||= d;
+    }
+    return first;
+  }
+
   next() { this.goTo(this.current + 1); }
   prev() { this.goTo(this.current - 1); }
 

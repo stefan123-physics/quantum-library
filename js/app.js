@@ -4,7 +4,8 @@ import { buildIndex, search, highlight, escapeHTML as esc } from './search.js';
 import { startBackground } from './bg.js';
 import { Pane, renderThumb } from './pdf.js';
 import { FORMULAS, CONSTANTS, UNITS, solve, fmt, parseNum, convert } from './lab.js';
-import { speakFallback, stopFallback } from './tts-fallback.js';
+import { ReadAloud, markupToHTML } from './read-aloud.js';
+import { languageVoices, loadVoices, voiceLabel, unlockSpeech } from './voices.js';
 
 /* ------------------------------------------------------------------ data */
 
@@ -619,6 +620,14 @@ const ICON = {
   link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.66 0l3-3a4 4 0 00-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 00-5.66 0l-3 3a4 4 0 005.66 5.66l1-1"/></svg>',
   download: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   print: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3"/><rect x="7" y="14" width="10" height="7"/></svg>',
+  text: '<svg viewBox="0 0 24 24"><path d="M4 18L9 6l5 12M5.8 14h6.4"/><path d="M15 11.5c.6-1 1.6-1.5 2.8-1.5 1.8 0 2.7 1 2.7 2.8V18m0-3.2c-.7 2-2 3.2-3.7 3.2-1.4 0-2.3-.8-2.3-2s1-2 3-2h3"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
+  skipBack: '<svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-9 6 9 6z"/></svg>',
+  skipFwd: '<svg viewBox="0 0 24 24"><path d="M18 5v14M6 6l9 6-9 6z"/></svg>',
+  voice: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  spinner: '<svg viewBox="0 0 24 24" class="spin"><path d="M12 3a9 9 0 109 9"/></svg>',
   sync: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0114-5.3L20 9M20 12a8 8 0 01-14 5.3L4 15"/><path d="M20 4v5h-5M4 20v-5h5"/></svg>',
 };
 
@@ -629,7 +638,6 @@ class Reader {
     this.split = params.get('split') === '1' && !!this.partner;
     this.sync = true;
     this.query = params.get('q') || '';
-    this.speaking = false;
     document.body.classList.add('in-reader');
     view.innerHTML = this.#template();
     this.root = view.querySelector('.reader');
@@ -639,6 +647,7 @@ class Reader {
     this.#buildThumbs();
     this.#buildMarks();
     this.#openPanes(page, +params.get('at') || 0);
+    this.#setupReadAloud();
     if (this.query) this.find(this.query);
     this.#applyNight();
     this.onTheme = () => this.#applyNight();
@@ -671,6 +680,7 @@ class Reader {
           <button class="tb-btn hide-xs" data-act="note" data-i18n-title="reader.note">${ICON.note}</button>
           ${this.partner ? `<button class="tb-btn" data-act="other" data-i18n-title="reader.otherLang">${ICON.lang}<small class="mono">${this.partner.lang.toUpperCase()}</small></button>
           <button class="tb-btn hide-sm ${this.split ? 'on' : ''}" data-act="split" data-i18n-title="reader.split">${ICON.split}</button>` : ''}
+          <button class="tb-btn" data-act="textview" id="r-textview" data-i18n-title="reader.textView">${ICON.text}</button>
           <button class="tb-btn hide-sm" data-act="speak" id="r-speak" data-i18n-title="reader.speak">${ICON.speak}</button>
           <button class="tb-btn hide-sm" data-act="night" id="r-night" data-i18n-title="reader.night">${ICON.moon}</button>
           <button class="tb-btn hide-xs" data-act="focus" data-i18n-title="reader.focus">${ICON.focus}</button>
@@ -719,6 +729,19 @@ class Reader {
         </aside>
         <div class="r-backdrop" data-act="sidebar"></div>
         <div class="r-panes">
+          <div class="text-view" id="text-view" hidden></div>
+          <div class="ra-player" data-state="idle" role="region" data-i18n-title="reader.speak">
+            <div class="ra-caption" id="ra-caption"></div>
+            <div class="ra-voices" id="ra-voices" hidden></div>
+            <div class="ra-bar">
+              <button class="ra-btn ra-more" data-act="ra-prev" data-i18n-title="ra.prev">${ICON.skipBack}</button>
+              <button class="ra-main" data-act="speak"><span class="ra-ico">${ICON.speak}</span><span class="ra-label" data-i18n="ra.read"></span></button>
+              <button class="ra-btn ra-more" data-act="ra-next" data-i18n-title="ra.next">${ICON.skipFwd}</button>
+              <button class="ra-btn ra-more mono" data-act="ra-rate" id="ra-rate" data-i18n-title="ra.rate">1×</button>
+              <button class="ra-btn ra-more" data-act="ra-voice" data-i18n-title="ra.voice">${ICON.voice}</button>
+              <button class="ra-btn ra-more" data-act="ra-stop" data-i18n-title="ra.stop">${ICON.close}</button>
+            </div>
+          </div>
           <div class="pane-host" id="pane-a"></div>
           ${this.split ? `<div class="pane-divider"><button class="tb-btn small on" data-act="sync" data-i18n-title="reader.sync">${ICON.sync}</button></div><div class="pane-host" id="pane-b"></div>` : ''}
         </div>
@@ -774,6 +797,7 @@ class Reader {
     this.a
       .open(page)
       .then(() => at && this.a.goToFraction(page, Math.max(0, at - 0.025)))
+      .then(() => store.settings.textMode && this.toggleTextView(true))
       .catch((err) => this.#fail(err));
     this.root.querySelector('#r-total').textContent = t('reader.of', { n: this.doc.numPages });
     if (this.split) {
@@ -937,16 +961,21 @@ class Reader {
   }
 
   goTo(n) {
+    if (this.textMode) {
+      n = Math.max(1, Math.min(this.doc.numPages, n));
+      this.#tvScroll(this.root.querySelector(`.tv-page[data-page="${n}"]`));
+      return;
+    }
     this.a.goTo(n);
   }
 
   action(act) {
     const a = this.a;
     switch (act) {
-      case 'prev': return a.prev();
-      case 'next': return a.next();
-      case 'zoom-in': return a.setZoom('in');
-      case 'zoom-out': return a.setZoom('out');
+      case 'prev': return this.goTo((this.textMode ? this.tvPage : a.current) - 1);
+      case 'next': return this.goTo((this.textMode ? this.tvPage : a.current) + 1);
+      case 'zoom-in': return this.textMode ? this.#tvSize(1) : a.setZoom('in');
+      case 'zoom-out': return this.textMode ? this.#tvSize(-1) : a.setZoom('out');
       case 'fit-width': return a.setZoom('width');
       case 'fit-page': return a.setZoom('page');
       case 'sidebar': return this.toggleSidebar();
@@ -991,7 +1020,18 @@ class Reader {
         this.root.querySelector('[data-act="sync"]').classList.toggle('on', this.sync);
         return;
       }
-      case 'speak': return this.speaking ? this.stopSpeaking() : this.speak();
+      case 'speak': return this.toggleRead();
+      case 'ra-prev': return this.ra.skip(-1);
+      case 'ra-next': return this.ra.skip(1);
+      case 'ra-stop': return this.ra.stop();
+      case 'ra-rate': {
+        const rates = [0.75, 1, 1.25, 1.5];
+        const r = rates[(rates.indexOf(this.ra.rate) + 1) % rates.length];
+        this.ra.setRate(r);
+        return this.#raLabels();
+      }
+      case 'ra-voice': return this.#voiceMenu();
+      case 'textview': return this.toggleTextView();
       case 'night': {
         store.setSetting('nightPages', !this.root.classList.contains('night'));
         return this.#applyNight();
@@ -1027,106 +1067,217 @@ class Reader {
 
   // Read aloud, sentence by sentence (Chrome silently stops utterances longer than ~15 s),
   // continuing onto the next pages until the user stops it with R or the button.
-  // Read aloud sentence by sentence (Chrome stops long utterances after ~15 s), continuing onto the
-  // next pages until stopped. Uses the browser's own voice when it has a working one for this
-  // language, otherwise the built-in meSpeak voice (vendor/mespeak), downloaded on first use.
-  async speak(page = this.a.current) {
-    const session = (this.speakSession = (this.speakSession || 0) + 1);
-    this.speaking = true;
-    this.#speakUI(true);
-    const lang = this.doc.lang;
+  /* ------------------------------------------------------- read aloud */
 
-    let voice = null;
-    if (ttsEngine !== 'builtin' && 'speechSynthesis' in window) {
-      const voices = await loadVoices();
-      if (session !== this.speakSession) return;
-      const match = (v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang);
-      voice = voices.find((v) => match(v) && v.localService) || voices.find(match) || null;
-    }
-    // no browser voice for this language → the built-in voice speaks both English and Dutch
-    let engine = ttsEngine === 'builtin' || !voice ? 'builtin' : 'native';
-    if (engine === 'builtin') toast(t('toast.fallbackVoice'));
-
-    if (engine === 'native' && (speechSynthesis.speaking || speechSynthesis.pending)) {
-      // Chrome can swallow a speak() issued right after cancel(): only cancel when needed, then wait a tick.
-      speechSynthesis.cancel();
-      await new Promise((r) => setTimeout(r, 120));
-    }
-
-    for (let p = page; p <= this.doc.numPages; p++) {
-      if (session !== this.speakSession) return;
-      if (p !== page) this.goTo(p);
-      toast(t('toast.reading', { page: p }));
-      for (const sentence of speakableSentences(this.doc.pages[p - 1] || '')) {
-        if (session !== this.speakSession) return;
-        let ok = engine === 'builtin' ? await this.#sayBuiltin(sentence, lang) : await this.#sayNative(sentence, lang, voice, session);
-        if (session !== this.speakSession) return;
-        if (ok !== true && engine === 'native') {
-          // the browser's engine is broken (accepts text, never speaks): switch for good and retry
-          engine = ttsEngine = 'builtin';
-          toast(t('toast.fallbackVoice'));
-          ok = await this.#sayBuiltin(sentence, lang);
-          if (session !== this.speakSession) return;
+  #setupReadAloud() {
+    this.ra = new ReadAloud(this.doc, {
+      settings: store.settings,
+      saveSetting: (k, v) => store.setSetting(k, v),
+      onState: (state) => {
+        this.root.querySelector('.ra-player').dataset.state = state;
+        this.root.classList.toggle('reading', state !== 'idle');
+        this.root.querySelectorAll('[data-act="speak"]').forEach((b) => b.classList.toggle('on', state === 'playing' || state === 'loading'));
+        if (state === 'idle') {
+          this.a.markSpeech(null);
+          this.root.querySelectorAll('.tv-on').forEach((e) => e.classList.remove('tv-on'));
+          this.root.querySelector('#ra-caption').innerHTML = '';
+          this.root.querySelector('#ra-voices').hidden = true;
         }
-        if (ok !== true) {
-          this.stopSpeaking();
-          return toast(t('toast.speechError', { error: ok }) + ' ' + t(speechHelpKey()));
-        }
-      }
-    }
-    if (session === this.speakSession) this.stopSpeaking();
-  }
-
-  #sayNative(sentence, lang, voice, session) {
-    return new Promise((resolve) => {
-      let started = false;
-      const u = new SpeechSynthesisUtterance(sentence);
-      u.lang = lang === 'nl' ? 'nl-NL' : 'en-GB';
-      try {
-        u.voice = voice;
-      } catch {
-        /* not a real SpeechSynthesisVoice */
-      }
-      u.onstart = () => {
-        started = true;
-        ttsEngine = 'native';
-      };
-      u.onend = () => resolve(true);
-      u.onerror = (e) => resolve(e.error === 'interrupted' || e.error === 'canceled' ? true : e.error);
-      // Some engines accept the text but never start (e.g. a broken speech-dispatcher): detect it.
-      if (ttsEngine !== 'native') {
-        setTimeout(() => {
-          if (!started && session === this.speakSession && !speechSynthesis.speaking) {
-            speechSynthesis.cancel();
-            resolve('no-start');
-          }
-        }, 3500);
-      }
-      speechSynthesis.speak(u);
+        this.#raLabels();
+      },
+      onUnit: (page, index, unit) => this.#showUnit(page, index, unit),
+      onMessage: (key, vars) => toast(t(key, vars)),
     });
+    this.#raLabels();
+    // Remember when the reader scrolls by hand (wheel, touch, scrollbar, keys), so following the voice
+    // does not fight them; our own smooth scrolling does not count.
+    this.#watchUserScroll(this.a.scroller);
   }
 
-  async #sayBuiltin(sentence, lang) {
-    try {
-      return await speakFallback(sentence, lang);
-    } catch (err) {
-      return err?.message || 'built-in voice unavailable';
+  #watchUserScroll(el) {
+    const mark = () => (this.userScrollAt = Date.now());
+    for (const ev of ['wheel', 'touchmove', 'pointerdown']) el.addEventListener(ev, mark, { passive: true });
+    el.addEventListener('keydown', (e) => /Arrow|Page|Home|End|^ $/.test(e.key) && mark());
+  }
+
+  #raLabels() {
+    const st = this.ra?.state || 'idle';
+    const main = this.root.querySelector('.ra-main');
+    main.querySelector('.ra-ico').innerHTML = st === 'playing' ? ICON.pause : st === 'loading' ? ICON.spinner : st === 'paused' ? ICON.play : ICON.speak;
+    main.querySelector('.ra-label').textContent = t(st === 'playing' ? 'ra.pause' : st === 'paused' ? 'ra.resume' : st === 'loading' ? 'ra.loading' : 'ra.read');
+    this.root.querySelector('#ra-rate').textContent = `${this.ra?.rate ?? 1}×`;
+  }
+
+  // Start, pause or resume. Must run synchronously inside the tap/key so iOS allows speech.
+  toggleRead(page, index) {
+    const st = this.ra.state;
+    if (page === undefined && st === 'playing') return this.ra.pause();
+    if (page === undefined && st === 'paused') {
+      unlockSpeech();
+      return this.ra.resume();
+    }
+    if (page === undefined && st === 'loading') return this.ra.stop();
+    unlockSpeech();
+    if (page !== undefined) return this.ra.start(page, index);
+    this.#startFromView();
+  }
+
+  // Begin with the first sentence at the reading position (35% down the view).
+  async #startFromView() {
+    let page, frac;
+    if (this.textMode) {
+      const top = this.tv.getBoundingClientRect().top + this.tv.clientHeight * 0.2;
+      const el = [...this.tv.querySelectorAll('[data-u]')].find((e) => e.getBoundingClientRect().bottom > top);
+      if (el) return this.ra.start(+el.closest('.tv-page').dataset.page, +el.dataset.u);
+      page = this.tvPage;
+      frac = 0;
+    } else ({ page, frac } = this.a.readingPoint());
+    const units = await this.ra.units(page);
+    const index = Math.max(0, units.findIndex((u) => u.boxes.some((b) => b[3] >= frac - 0.02)));
+    this.ra.start(page, index);
+  }
+
+  #showUnit(page, index, unit) {
+    this.root.querySelector('#ra-caption').innerHTML = `<span class="ra-k-${unit.kind}">${markupToHTML(unit.show)}</span>`;
+    const follow = Date.now() - (this.userScrollAt || 0) > 5000;
+    // highlight in the PDF
+    const el = this.a.markSpeech(page, unit.boxes);
+    if (!this.textMode && follow && el) {
+      const sc = this.a.scroller;
+      const r = el.getBoundingClientRect();
+      const box = sc.getBoundingClientRect();
+      const bottomRoom = this.root.querySelector('.ra-player').offsetHeight + 40;
+      if (r.top < box.top + 40 || r.bottom > box.bottom - bottomRoom) {
+        this.autoScrollAt = Date.now();
+        const delta = r.top - box.top - sc.clientHeight * 0.28;
+        // far away (a new page): jump; close by: glide
+        sc.scrollTo({ top: sc.scrollTop + delta, behavior: Math.abs(delta) > sc.clientHeight * 1.2 ? 'auto' : 'smooth' });
+      }
+    } else if (!this.textMode && follow && page !== this.a.current) {
+      this.autoScrollAt = Date.now();
+      this.a.goTo(page);
+    }
+    // and in the reading view
+    if (this.tv) {
+      this.tv.querySelectorAll('.tv-on').forEach((e) => e.classList.remove('tv-on'));
+      const u = this.tv.querySelector(`.tv-page[data-page="${page}"] [data-u="${index}"]`);
+      if (u) {
+        u.classList.add('tv-on');
+        if (this.textMode && follow) {
+          this.autoScrollAt = Date.now();
+          this.#tvScroll(u, true);
+        }
+      }
     }
   }
 
-  #speakUI(on) {
-    this.root?.querySelectorAll('[data-act="speak"]').forEach((b) => b.classList.toggle('on', on));
-    const s = this.root?.querySelector('#r-speak');
-    if (s) s.title = t(on ? 'reader.stopSpeak' : 'reader.speak');
+  async #voiceMenu() {
+    const box = this.root.querySelector('#ra-voices');
+    if (!box.hidden) return (box.hidden = true);
+    const lang = this.doc.lang;
+    const voices = languageVoices(await loadVoices(), lang).slice(0, 8);
+    const pick = store.settings[`voice_${lang}`] || 'auto';
+    const opt = (value, label, sub = '') =>
+      `<label class="ra-voice"><input type="radio" name="ra-voice" value="${esc(value)}" ${pick === value ? 'checked' : ''}><span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span></label>`;
+    box.innerHTML =
+      `<p class="ra-vh">${esc(t('ra.voiceFor', { lang: t('lang.' + lang) }))}</p>` +
+      opt('auto', t('ra.auto'), voices[0] ? voiceLabel(voices[0]) : t('ra.builtinShort')) +
+      voices.map((v) => opt(v.voiceURI, voiceLabel(v), v.localService ? '' : t('ra.online'))).join('') +
+      opt('builtin', t('ra.builtin')) +
+      (voices.length ? '' : `<p class="ra-vh muted">${esc(t('ra.noVoices', { lang: t('lang.' + lang) }))}</p>`);
+    box.hidden = false;
+    box.onchange = (e) => {
+      const v = e.target.value;
+      this.ra.setVoice(v === 'auto' ? undefined : v);
+      box.hidden = true;
+    };
   }
 
-  stopSpeaking() {
-    this.speakSession = (this.speakSession || 0) + 1; // invalidates the running reading loop
-    if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
-    stopFallback();
-    this.speaking = false;
-    this.#speakUI(false);
+  /* ----------------------------------------------------- reading view */
+
+  async toggleTextView(force) {
+    this.textMode = force ?? !this.textMode;
+    this.root.classList.toggle('text-mode', this.textMode);
+    this.root.querySelector('#r-textview').classList.toggle('on', this.textMode);
+    store.setSetting('textMode', this.textMode);
+    const tv = this.root.querySelector('#text-view');
+    tv.hidden = !this.textMode;
+    if (!this.textMode) {
+      if (this.tvPage) this.a.goTo(this.tvPage, false);
+      return;
+    }
+    const page = this.a.current;
+    if (!this.tv) await this.#buildTextView(tv);
+    this.tvPage = page;
+    this.#tvScroll(tv.querySelector(`.tv-page[data-page="${page}"]`));
   }
+
+  async #buildTextView(tv) {
+    this.tv = tv;
+    tv.style.setProperty('--tv-size', (store.settings.tvSize || 18) + 'px');
+    tv.innerHTML = `<div class="tv-loading">${ICON.spinner}</div>`;
+    let html = '';
+    for (let p = 1; p <= this.doc.numPages; p++) {
+      const units = await this.ra.units(p);
+      html += `<section class="tv-page" data-page="${p}"><div class="tv-pno mono">${esc(t('reader.page'))} ${p}</div>`;
+      let open = null;
+      units.forEach((u, i) => {
+        const body = markupToHTML(u.show);
+        if (u.kind === 'p') {
+          if (open !== u.para) {
+            if (open !== null) html += '</p>';
+            html += '<p>';
+            open = u.para;
+          } else html += ' ';
+          html += `<span data-u="${i}">${body}</span>`;
+          return;
+        }
+        if (open !== null) ((html += '</p>'), (open = null));
+        html += u.kind === 'h' ? `<h3 data-u="${i}">${body}</h3>` : `<div class="tv-eq" data-u="${i}">${body}</div>`;
+      });
+      if (open !== null) html += '</p>';
+      html += '</section>';
+    }
+    tv.innerHTML = `<article class="tv-article">${html}</article>`;
+    // tap a sentence to hear it from there
+    tv.addEventListener('click', (e) => {
+      const u = e.target.closest('[data-u]');
+      if (!u || window.getSelection()?.toString()) return;
+      this.toggleRead(+u.closest('.tv-page').dataset.page, +u.dataset.u);
+    });
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (!en.isIntersecting || !this.textMode) continue;
+          const n = +en.target.dataset.page;
+          this.tvPage = n;
+          this.root.querySelector('#r-page').value = n;
+          this.root.querySelector('#r-progress').style.width = (n / this.doc.numPages) * 100 + '%';
+          store.visit(this.doc.id, n);
+        }
+      },
+      { root: tv, rootMargin: '-30% 0px -65% 0px' },
+    );
+    tv.querySelectorAll('.tv-page').forEach((sec) => io.observe(sec));
+    this.tvIO = io;
+    this.#watchUserScroll(tv);
+  }
+
+  // Scroll only the reading view (scrollIntoView would also move the page around it).
+  #tvScroll(el, center = false) {
+    if (!el || !this.tv) return;
+    const top = el.getBoundingClientRect().top - this.tv.getBoundingClientRect().top + this.tv.scrollTop;
+    const target = center ? top - this.tv.clientHeight * 0.35 : top - 8;
+    this.tv.scrollTo({ top: target, behavior: center && Math.abs(target - this.tv.scrollTop) < this.tv.clientHeight ? 'smooth' : 'auto' });
+  }
+
+  #tvSize(delta) {
+    const size = Math.max(14, Math.min(30, (store.settings.tvSize || 18) + delta * 2));
+    store.setSetting('tvSize', size);
+    this.tv?.style.setProperty('--tv-size', size + 'px');
+    this.root.querySelector('#r-zoom').textContent = `${size}px`;
+  }
+
 
   // Interface language changed while reading: hop to the matching edition at the same place.
   onLang(lang) {
@@ -1149,7 +1300,7 @@ class Reader {
 
   destroy() {
     setProgressFavicon(null);
-    this.stopSpeaking();
+    this.ra?.stop();
     this.a?.destroy();
     this.b?.destroy();
     this.thumbIO?.disconnect();
@@ -1161,55 +1312,6 @@ class Reader {
 function renderReader(doc, page, params) {
   closeReader();
   currentReader = new Reader(doc, page, params);
-}
-
-/* ------------------------------------------------------------ read aloud */
-
-// 'native' once the browser's own voice is proven to work, 'builtin' once we fell back to meSpeak.
-let ttsEngine = null;
-
-// Which help text fits this browser when speech does not work.
-function speechHelpKey() {
-  const ua = navigator.userAgent;
-  const linux = /Linux/.test(ua) && !/Android/.test(ua);
-  if (linux && /Chrome|Chromium|Edg|OPR|Brave/.test(ua)) return 'toast.noVoicesChromeLinux';
-  if (linux) return 'toast.noVoicesLinux';
-  return 'toast.noVoices';
-}
-
-// Voices load asynchronously in Chrome; wait briefly for them.
-function loadVoices() {
-  const now = speechSynthesis.getVoices();
-  if (now.length) return Promise.resolve(now);
-  return new Promise((resolve) => {
-    const done = () => resolve(speechSynthesis.getVoices());
-    speechSynthesis.addEventListener('voiceschanged', done, { once: true });
-    setTimeout(done, 1500);
-  });
-}
-
-// Prose sentences of a page; formula fragments (mostly symbols/digits) are skipped.
-function speakableSentences(raw) {
-  const text = raw
-    .split('\n')
-    .filter((l) => (l.match(/[A-Za-zÀ-ÿ]/g) || []).length > 6)
-    .join(' ')
-    .replace(/\(\d+\)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  // split only where punctuation is followed by a space, so decimals like 1.98 stay intact
-  const parts = text.split(/(?<=[.!?])\s+/);
-  const out = [];
-  for (let p of parts.map((x) => x.trim()).filter(Boolean)) {
-    // keep each utterance short enough for Chrome
-    while (p.length > 220) {
-      const cut = p.lastIndexOf(' ', 200) > 80 ? p.lastIndexOf(' ', 200) : 200;
-      out.push(p.slice(0, cut));
-      p = p.slice(cut).trim();
-    }
-    if (p) out.push(p);
-  }
-  return out;
 }
 
 /* -------------------------------------------------------- smart favicon */

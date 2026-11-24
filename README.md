@@ -44,6 +44,8 @@ Drop PDFs in this folder and run `npm run build:index`. The builder:
 
 - extracts the text of every page (for search and read-aloud),
 - detects headings from font size/position to build the table of contents,
+- rebuilds formula structure from glyph positions and fonts (fractions, powers, subscripts, symbols)
+  into `data/speech/<doc>.json`, used by read-aloud and the reading view (`tools/speech-segments.mjs`),
 - guesses the language from the file name (`english-…`, `nederlands-…`, `-en`, `-nl`) and pairs
   editions with the same base name, aligning their topics so you can jump between languages,
 - tags each topic with a physics field (mechanics, optics, quantum…).
@@ -58,9 +60,15 @@ Drop PDFs in this folder and run `npm run build:index`. The builder:
   fit width/page, thumbnails, auto-generated contents grouped by field, current-topic bar with
   previous/next topic (`[` `]`), reading-progress bar, focus mode (`F`), read aloud (`R`),
   print, download, copy link to the exact page.
-- **Read aloud** (`R`) — sentence by sentence, continuing page after page. Uses the browser's
-  voice when it has one for the book's language; otherwise a built-in English/Dutch voice
-  (meSpeak, GPL-3.0, in `vendor/mespeak/`, downloaded only when needed).
+- **Read aloud** — the big *Read aloud* button (or `R`) reads from where you are, sentence by
+  sentence, page after page, highlighting each sentence on the PDF and showing it as a caption.
+  Formulas are spoken properly in English and Dutch ("delta v equals delta p over m",
+  "g is gelijk aan 9,81 meter per seconde kwadraat"). Pause/resume, previous/next sentence,
+  speed, and a clean voice list (novelty voices such as Bubbles or Zarvox are never offered).
+  Uses the device's voice; without one, a built-in English/Dutch voice (meSpeak, GPL-3.0,
+  `vendor/mespeak/`, downloaded only when needed).
+- **Reading view** (*Aa*) — the PDF's text reflowed in large type with fractions and powers laid
+  out, ideal on phones; tap any sentence or formula to hear it from there.
 - **Side-by-side EN | NL** (`S`) with synchronised scrolling.
 - **Search everything** (Ctrl/⌘ K or `/`) — topics and full page text of both editions,
   with Dutch↔English synonyms (searching "wrijving" finds "friction"), fuzzy matching, snippets
@@ -87,5 +95,9 @@ js/lab.js            formula solver, constants, unit conversion
 js/i18n.js           all interface strings in English and Dutch
 js/store.js          localStorage persistence
 js/bg.js             animated particle-field background
+js/read-aloud.js     read-aloud engine: units, playback, voices, reading-view markup
+js/math-speech.js    formulas → spoken English/Dutch (ideas from open-cosmology's lib/speech.ts)
+js/voices.js         voice ranking/filtering, iOS speech unlock
+js/tts-fallback.js   built-in meSpeak voice for devices without one
 tools/build-index.mjs  builds data/library.json and copies pdf.js into vendor/
 ```
