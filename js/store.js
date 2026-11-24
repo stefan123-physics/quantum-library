@@ -65,6 +65,14 @@ export const store = {
     memory.marks.push({ id: crypto.randomUUID(), docId, page, note, created: Date.now() });
     save();
   },
+  updateNote(id, note) {
+    const m = memory.marks.find((x) => x.id === id);
+    if (m) {
+      m.note = note;
+      m.updated = Date.now();
+      save();
+    }
+  },
   removeMark(id) {
     memory.marks = memory.marks.filter((m) => m.id !== id);
     save();

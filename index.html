@@ -104,6 +104,21 @@
     </div>
   </dialog>
 
+  <dialog id="note-dialog" class="note-dialog">
+    <form method="dialog" class="nd-box">
+      <header class="nd-head">
+        <span class="nd-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
+        <div><h2 class="nd-title"></h2><p class="nd-context"></p></div>
+      </header>
+      <textarea class="nd-text" rows="6" maxlength="4000"></textarea>
+      <footer class="nd-foot">
+        <span class="nd-hint"></span>
+        <button type="button" class="btn nd-cancel" value="cancel"></button>
+        <button type="submit" class="btn primary nd-save" value="save"></button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog id="help" class="help">
     <h2>Keyboard shortcuts</h2>
     <dl></dl>

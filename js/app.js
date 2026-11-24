@@ -570,6 +570,7 @@ function renderNotes() {
               return `<li class="${m.note ? 'note' : 'bm'}">
                 <a href="${readHash(d, m.page)}"><span class="mono pg">${esc(t('notes.page', { page: m.page }))}</span>
                 <span class="n-body">${topic ? `<span class="n-topic">${esc(topic.title)}</span>` : ''}${m.note ? `<span class="n-text">${esc(m.note)}</span>` : '<span class="n-text muted">🔖</span>'}</span></a>
+                ${m.note ? `<button class="btn icon small" data-edit="${m.id}" data-doc="${d.id}" title="${esc(t('note.edit'))}">✎</button>` : ''}
                 <button class="btn icon small" data-del="${m.id}" title="${esc(t('notes.delete'))}">✕</button></li>`;
             })
             .join('')}</ul></div>`,
@@ -581,6 +582,17 @@ function renderNotes() {
   view.querySelectorAll('[data-del]').forEach((b) =>
     b.addEventListener('click', () => {
       store.removeMark(b.dataset.del);
+      renderNotes();
+    }),
+  );
+  view.querySelectorAll('[data-edit]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const m = store.marks.find((x) => x.id === b.dataset.edit);
+      const d = docsById[b.dataset.doc];
+      const text = await openNoteDialog({ title: t('note.editTitle'), context: t('note.context', { page: m.page, topic: d.topics[topicIndexAt(d, m.page)]?.title || d.title }), text: m.note });
+      if (text === null) return;
+      if (text) store.updateNote(m.id, text);
+      else store.removeMark(m.id);
       renderNotes();
     }),
   );
@@ -922,11 +934,23 @@ class Reader {
       ? `<ul class="notes-list compact">${marks
           .map(
             (m) => `<li class="${m.note ? 'note' : 'bm'}"><button data-page="${m.page}"><span class="mono pg">p.${m.page}</span><span class="n-text">${m.note ? esc(m.note) : '🔖'}</span></button>
+            ${m.note ? `<button class="btn icon small" data-edit="${m.id}" title="${esc(t('note.edit'))}">✎</button>` : ''}
             <button class="btn icon small" data-del="${m.id}" title="${esc(t('notes.delete'))}">✕</button></li>`,
           )
           .join('')}</ul>`
       : `<p class="muted small pad">${esc(t('reader.noMarks'))}</p>`;
     el.onclick = (e) => {
+      const ed = e.target.closest('[data-edit]');
+      if (ed) {
+        const m = store.marks.find((x) => x.id === ed.dataset.edit);
+        openNoteDialog({ title: t('note.editTitle'), context: t('note.context', { page: m.page, topic: this.doc.topics[topicIndexAt(this.doc, m.page)]?.title || this.doc.title }), text: m.note }).then((text) => {
+          if (text === null) return;
+          if (text) store.updateNote(m.id, text);
+          else store.removeMark(m.id);
+          this.#buildMarks();
+        });
+        return;
+      }
       const del = e.target.closest('[data-del]');
       if (del) {
         store.removeMark(del.dataset.del);
@@ -1008,13 +1032,15 @@ class Reader {
         return this.#onPage(a.current);
       }
       case 'note': {
-        const text = prompt(t('reader.notePrompt', { page: a.current }));
-        if (text && text.trim()) {
-          store.addNote(this.doc.id, a.current, text.trim());
+        const page = this.textMode ? this.tvPage : a.current;
+        const topic = this.doc.topics[topicIndexAt(this.doc, page)];
+        openNoteDialog({ title: t('note.title'), context: t('note.context', { page, topic: topic?.title || this.doc.title }) }).then((text) => {
+          if (!text) return;
+          store.addNote(this.doc.id, page, text);
           toast(t('toast.noteSaved'));
           this.#buildMarks();
           this.showTab('marks');
-        }
+        });
         return;
       }
       case 'other': {
@@ -1516,6 +1542,42 @@ pList.addEventListener('mousemove', (e) => {
 });
 palette.addEventListener('click', (e) => e.target === palette && palette.close());
 
+/* ----------------------------------------------------------- note dialog */
+
+// The app's own note editor (instead of the browser's prompt()). Resolves with the trimmed text,
+// '' when emptied, or null when cancelled.
+const noteDialog = document.getElementById('note-dialog');
+function openNoteDialog({ title, context, text = '' }) {
+  const d = noteDialog;
+  const area = d.querySelector('.nd-text');
+  d.querySelector('.nd-title').textContent = title;
+  d.querySelector('.nd-context').textContent = context;
+  d.querySelector('.nd-hint').textContent = t('note.hint');
+  d.querySelector('.nd-cancel').textContent = t('note.cancel');
+  d.querySelector('.nd-save').textContent = t('note.save');
+  area.placeholder = t('note.placeholder');
+  area.value = text;
+  d.returnValue = '';
+  d.showModal();
+  area.focus();
+  area.setSelectionRange(area.value.length, area.value.length);
+  return new Promise((resolve) => {
+    const finish = () => {
+      d.removeEventListener('close', finish);
+      resolve(d.returnValue === 'save' ? area.value.trim() : null);
+    };
+    d.addEventListener('close', finish);
+  });
+}
+noteDialog.querySelector('.nd-cancel').addEventListener('click', () => noteDialog.close('cancel'));
+noteDialog.querySelector('.nd-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    noteDialog.close('save');
+  }
+});
+noteDialog.addEventListener('click', (e) => e.target === noteDialog && noteDialog.close('cancel'));
+
 /* ------------------------------------------------------------------ help */
 
 const help = document.getElementById('help');
@@ -1548,7 +1610,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     return palette.open ? palette.close() : openPalette();
   }
-  if (typing || e.ctrlKey || e.metaKey || e.altKey || palette.open || help.open) return;
+  if (typing || e.ctrlKey || e.metaKey || e.altKey || palette.open || help.open || noteDialog.open) return;
   const r = currentReader;
   const k = e.key;
   if (k === '/') return (e.preventDefault(), openPalette());

@@ -934,3 +934,38 @@ h1, h2, h3, .tl-title, .dt-name, .doc-meta h3, .daily-card h3, .toc-item button 
   body:not(.in-reader) .nav { padding: 4px; gap: 0; }
   body:not(.in-reader) .nav a { padding: 7px 8px; font-size: .78rem; }
 }
+
+/* in-app note dialog */
+.note-dialog { width: min(560px, calc(100% - 24px)); padding: 0; border: 0; background: transparent; }
+.nd-box {
+  display: grid; gap: 14px; padding: 20px; border-radius: 18px; background: var(--surface-solid);
+  border: 1px solid var(--border-strong); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .6), 0 0 0 1px var(--glow);
+  animation: nd-in .22s var(--ease);
+}
+@keyframes nd-in { from { transform: translateY(12px) scale(.98); opacity: 0; } }
+.nd-head { display: flex; gap: 12px; align-items: center; }
+.nd-icon {
+  width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 12px; color: var(--accent-ink);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.nd-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nd-title { margin: 0; font-size: 1.2rem; }
+.nd-context { margin: 2px 0 0; font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.nd-text {
+  width: 100%; min-height: 140px; resize: vertical; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--text); font: 1rem/1.55 var(--font-sans);
+  background-image: repeating-linear-gradient(transparent 0 calc(1.55em + 11px), var(--grid-major) calc(1.55em + 11px) calc(1.55em + 12px));
+}
+.nd-text:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--glow); }
+.nd-foot { display: flex; gap: 8px; align-items: center; }
+.nd-hint { margin-right: auto; font-size: .8rem; color: var(--muted); }
+@media (max-width: 640px) {
+  .note-dialog { width: 100%; max-width: none; margin: auto 0 0; }
+  .nd-box { border-radius: 20px 20px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .nd-hint { display: none; }
+  .nd-foot .btn { flex: 1; justify-content: center; }
+  .nd-text { font-size: 16px; } /* 16px keeps iOS from zooming in */
+}
+/* in the reader, messages sit above the read-aloud player */
+body.in-reader #toasts { bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.in-reader .reading ~ #toasts, body.in-reader:has(.reading) #toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
