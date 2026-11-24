@@ -66,10 +66,11 @@ function toast(msg) {
   el.textContent = msg;
   document.getElementById('toasts').appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
+  // long messages stay up longer so they can actually be read
   setTimeout(() => {
     el.classList.remove('show');
     setTimeout(() => el.remove(), 300);
-  }, 2400);
+  }, Math.max(2400, msg.length * 55));
 }
 
 /* ---------------------------------------------------------------- theme */
@@ -807,7 +808,6 @@ class Reader {
     // keep the URL shareable without triggering the router
     const hash = readHash(this.doc, n, this.query || undefined, this.split);
     if (location.hash !== hash) history.replaceState(null, '', hash);
-    if (this.speaking) this.stopSpeaking();
     this.#updateTopic(true);
   }
 
@@ -1024,33 +1024,72 @@ class Reader {
     this.root.querySelectorAll('[data-act="night"]').forEach((b) => b.classList.toggle('on', night));
   }
 
-  speak() {
+  // Read aloud, sentence by sentence (Chrome silently stops utterances longer than ~15 s),
+  // continuing onto the next pages until the user stops it with R or the button.
+  async speak(page = this.a.current) {
     if (!('speechSynthesis' in window)) return toast(t('toast.noSpeech'));
-    const raw = this.doc.pages[this.a.current - 1] || '';
-    // keep prose lines, drop stray math fragments
-    const text = raw
-      .split('\n')
-      .filter((l) => (l.match(/[A-Za-zÀ-ÿ]/g) || []).length > 6)
-      .join(' ')
-      .replace(/\(\d+\)/g, '');
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = this.doc.lang === 'nl' ? 'nl-NL' : 'en-GB';
-    const voice = speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith(this.doc.lang));
-    if (voice) u.voice = voice;
-    u.onend = () => this.stopSpeaking();
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
+    const session = (this.speakSession = (this.speakSession || 0) + 1);
     this.speaking = true;
-    this.root.querySelectorAll('[data-act="speak"]').forEach((b) => b.classList.add('on'));
-    this.root.querySelector('#r-speak').title = t('reader.stopSpeak');
+    this.#speakUI(true);
+
+    const voices = await loadVoices();
+    if (session !== this.speakSession) return;
+    if (!voices.length) {
+      this.stopSpeaking();
+      return toast(t('toast.noVoices'));
+    }
+    const lang = this.doc.lang;
+    const voice =
+      voices.find((v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang) && v.localService) ||
+      voices.find((v) => v.lang.toLowerCase().replace('_', '-').startsWith(lang));
+    if (!voice) toast(t('toast.noVoiceLang', { lang: t('lang.' + lang) }));
+
+    // Chrome can swallow a speak() issued right after cancel(): only cancel when needed, then wait a tick.
+    if (speechSynthesis.speaking || speechSynthesis.pending) {
+      speechSynthesis.cancel();
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    for (let p = page; p <= this.doc.numPages; p++) {
+      if (session !== this.speakSession) return;
+      if (p !== page) this.goTo(p);
+      toast(t('toast.reading', { page: p }));
+      for (const sentence of speakableSentences(this.doc.pages[p - 1] || '')) {
+        if (session !== this.speakSession) return;
+        const ok = await new Promise((resolve) => {
+          const u = new SpeechSynthesisUtterance(sentence);
+          u.lang = lang === 'nl' ? 'nl-NL' : 'en-GB';
+          try {
+            if (voice) u.voice = voice;
+          } catch {
+            /* not a real SpeechSynthesisVoice */
+          }
+          u.onend = () => resolve(true);
+          u.onerror = (e) => resolve(e.error === 'interrupted' || e.error === 'canceled' ? true : e.error);
+          speechSynthesis.speak(u);
+        });
+        if (ok !== true) {
+          if (session === this.speakSession) {
+            this.stopSpeaking();
+            toast(t('toast.speechError', { error: ok }));
+          }
+          return;
+        }
+      }
+    }
+    if (session === this.speakSession) this.stopSpeaking();
+  }
+
+  #speakUI(on) {
+    this.root?.querySelectorAll('[data-act="speak"]').forEach((b) => b.classList.toggle('on', on));
+    const s = this.root?.querySelector('#r-speak');
+    if (s) s.title = t(on ? 'reader.stopSpeak' : 'reader.speak');
   }
 
   stopSpeaking() {
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    this.speakSession = (this.speakSession || 0) + 1; // invalidates the running reading loop
+    if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     this.speaking = false;
-    this.root?.querySelectorAll('[data-act="speak"]').forEach((b) => b.classList.remove('on'));
-    const s = this.root?.querySelector('#r-speak');
-    if (s) s.title = t('reader.speak');
+    this.#speakUI(false);
   }
 
   // Interface language changed while reading: hop to the matching edition at the same place.
@@ -1086,6 +1125,43 @@ class Reader {
 function renderReader(doc, page, params) {
   closeReader();
   currentReader = new Reader(doc, page, params);
+}
+
+/* ------------------------------------------------------------ read aloud */
+
+// Voices load asynchronously in Chrome; wait briefly for them.
+function loadVoices() {
+  const now = speechSynthesis.getVoices();
+  if (now.length) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const done = () => resolve(speechSynthesis.getVoices());
+    speechSynthesis.addEventListener('voiceschanged', done, { once: true });
+    setTimeout(done, 1500);
+  });
+}
+
+// Prose sentences of a page; formula fragments (mostly symbols/digits) are skipped.
+function speakableSentences(raw) {
+  const text = raw
+    .split('\n')
+    .filter((l) => (l.match(/[A-Za-zÀ-ÿ]/g) || []).length > 6)
+    .join(' ')
+    .replace(/\(\d+\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // split only where punctuation is followed by a space, so decimals like 1.98 stay intact
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const out = [];
+  for (let p of parts.map((x) => x.trim()).filter(Boolean)) {
+    // keep each utterance short enough for Chrome
+    while (p.length > 220) {
+      const cut = p.lastIndexOf(' ', 200) > 80 ? p.lastIndexOf(' ', 200) : 200;
+      out.push(p.slice(0, cut));
+      p = p.slice(cut).trim();
+    }
+    if (p) out.push(p);
+  }
+  return out;
 }
 
 /* -------------------------------------------------------- smart favicon */
