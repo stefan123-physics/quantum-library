@@ -17,6 +17,15 @@ const TMP = join(ROOT, 'brand', '.tmp');
 const CHROME = process.env.CHROME || ['google-chrome', 'chromium', 'chromium-browser'][0];
 const SITE_URL = (process.env.SITE_URL || '').replace(/\/$/, '');
 
+// Hosting builders (Vercel, Netlify…) have no Chrome. The rendered files are committed, so skip
+// instead of failing the deploy.
+try {
+  await run(CHROME, ['--version']);
+} catch {
+  console.warn(`build:icons skipped: "${CHROME}" not found. Using the committed icons and og-image.png.`);
+  process.exit(0);
+}
+
 // --- tiny static server so the share image can fetch data/library.json and the PDFs
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.pdf': 'application/pdf', '.css': 'text/css', '.png': 'image/png' };
 const server = createServer(async (req, res) => {
