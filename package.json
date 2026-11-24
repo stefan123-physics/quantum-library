@@ -1,0 +1,17 @@
+{
+  "name": "quantum-pdf-library",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A bilingual (EN/NL) physics-styled PDF library and reader.",
+  "scripts": {
+    "build:index": "node tools/build-index.mjs",
+    "serve": "python3 -m http.server 8080",
+    "start": "npm run build:index && npm run serve",
+    "build:icons": "node tools/build-icons.mjs",
+    "build": "npm run build:index && npm run build:icons"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}

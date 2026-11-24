@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quantum Library — physics formulas in English & Dutch</title>
+  <meta name="description" content="Every physics formula, one orbit away: worked examples and exercises in English and Dutch. Search both books at once, read them side by side, take notes and solve equations in the Formula Lab.">
+  <meta name="theme-color" content="#060a17" media="(prefers-color-scheme: dark)" id="theme-color-dark">
+  <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" id="theme-color-light">
+  <meta name="color-scheme" content="dark light">
+
+  <!-- icons: SVG tab icon that follows the browser theme, PNG/ICO fallbacks, home-screen icons -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" id="favicon">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Quantum">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="application-name" content="Quantum Library">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- link previews (WhatsApp, iMessage, Slack, Discord, X, LinkedIn, Facebook…) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Quantum Library">
+  <meta property="og:title" content="Quantum Library — every physics formula, one orbit away">
+  <meta property="og:description" content="Worked physics examples & exercises in English and Dutch. Search both books at once, read side by side, solve equations.">
+  <meta property="og:url" content="./">
+  <meta property="og:image" content="og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Quantum Library: an atom logo beside the English and Dutch physics formula books, with 326 pages, 132 topics and 12 fields.">
+  <meta property="og:locale" content="en_GB">
+  <meta property="og:locale:alternate" content="nl_NL">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Quantum Library — every physics formula, one orbit away">
+  <meta name="twitter:description" content="Worked physics examples & exercises in English and Dutch: search, read side by side, solve.">
+  <meta name="twitter:image" content="og-image.png">
+  <meta name="twitter:image:alt" content="Quantum Library: an atom logo beside the English and Dutch physics formula books.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Apply the saved/system theme before first paint to avoid a flash.
+    try {
+      const s = JSON.parse(localStorage.getItem('quantum-library:v1') || '{}').settings || {};
+      document.documentElement.dataset.theme = s.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      if (s.lang) document.documentElement.lang = s.lang;
+    } catch { document.documentElement.dataset.theme = 'dark'; }
+  </script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="grid-paper" aria-hidden="true"></div>
+  <a class="skip" href="#view">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="#/" aria-label="Home">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <ellipse cx="20" cy="20" rx="17" ry="6.5"/>
+        <ellipse cx="20" cy="20" rx="17" ry="6.5" transform="rotate(60 20 20)"/>
+        <ellipse cx="20" cy="20" rx="17" ry="6.5" transform="rotate(120 20 20)"/>
+        <circle cx="20" cy="20" r="3.2" class="core"/>
+      </svg>
+      <span data-i18n="app.name">Quantum Library</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#/" data-route="home" data-i18n="nav.library">Library</a>
+      <a href="#/topics" data-route="topics" data-i18n="nav.topics">Topics</a>
+      <a href="#/lab" data-route="lab" data-i18n="nav.lab">Formula Lab</a>
+      <a href="#/notes" data-route="notes" data-i18n="nav.notes">Notes</a>
+    </nav>
+    <div class="header-actions">
+      <button class="search-btn" id="search-open"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span data-i18n="nav.search">Search…</span><kbd>Ctrl K</kbd></button>
+      <button class="lang-toggle" id="lang-toggle" data-i18n-title="lang.toggle"><span data-l="en">EN</span><span data-l="nl">NL</span></button>
+      <button class="theme-toggle" id="theme-toggle" data-i18n-title="theme.toggle">
+        <svg viewBox="0 0 24 24" class="sun" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        <svg viewBox="0 0 24 24" class="moon" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></svg>
+      </button>
+      <button class="install-btn" id="install-btn" hidden data-i18n-title="install.app"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><rect x="4" y="17" width="16" height="4" rx="1.5"/></svg><span data-i18n="install.app">Install app</span></button>
+      <button class="icon-btn hide-sm" id="help-open" aria-label="Keyboard shortcuts">?</button>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1">
+    <div class="boot"><div class="atom-spinner"><i></i><i></i><i></i><b></b></div></div>
+  </main>
+
+  <footer class="site-footer">
+    <p><span class="mono">ΔxΔp ≥ ħ/2</span> · <span id="foot-made">Built with PDF.js.</span></p>
+  </footer>
+
+  <dialog id="palette" class="palette" aria-label="Search">
+    <div class="p-box">
+      <div class="p-input"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="text" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+      <ul class="p-results" role="listbox"></ul>
+      <p class="p-hint"></p>
+    </div>
+  </dialog>
+
+  <dialog id="help" class="help">
+    <h2>Keyboard shortcuts</h2>
+    <dl></dl>
+    <button class="btn help-close">Close</button>
+  </dialog>
+
+  <div id="toasts" aria-live="polite"></div>
+</body>
+</html>

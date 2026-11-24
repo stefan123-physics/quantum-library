@@ -1,0 +1,117 @@
+<!doctype html>
+<!-- Source of og-image.png (1200×630 link preview). Rendered by tools/build-icons.mjs through a local
+     server so it can read data/library.json and draw the real PDF pages. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@500;700&family=Inter:wght@500&display=block" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative; color: #e8edff; font-family: 'Inter', sans-serif;
+    background:
+      radial-gradient(700px 420px at 92% 8%, rgba(167,139,250,.35), transparent 60%),
+      radial-gradient(600px 400px at 0% 100%, rgba(56,189,248,.25), transparent 60%),
+      #060a17;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(120,160,255,.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,160,255,.10) 1px, transparent 1px),
+      linear-gradient(rgba(120,160,255,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,160,255,.045) 1px, transparent 1px);
+    background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  }
+  .content { position: absolute; left: 72px; top: 56px; width: 700px; }
+  .brand { display: flex; align-items: center; gap: 16px; font: 700 30px 'Space Grotesk'; }
+  .brand img { width: 58px; height: 58px; border-radius: 14px; }
+  .kicker { margin: 30px 0 10px; font: 500 20px 'JetBrains Mono'; color: #38bdf8; letter-spacing: .08em; }
+  h1 {
+    margin: 0; font: 700 58px/1.04 'Space Grotesk'; letter-spacing: -.03em;
+    background: linear-gradient(100deg, #fff 35%, #38bdf8 70%, #a78bfa 95%); -webkit-background-clip: text; color: transparent;
+  }
+  .sub { margin: 16px 0 0; font-size: 23px; max-width: 600px; color: #b7c1e3; }
+  .stats { display: flex; gap: 12px; margin-top: 26px; }
+  .stat { padding: 12px 18px; border-radius: 14px; background: rgba(14,22,46,.8); border: 1px solid rgba(140,170,255,.2); }
+  .stat b { display: block; font: 700 32px 'JetBrains Mono'; }
+  .stat span { font-size: 16px; color: #7f8bb3; }
+  .fields { position: absolute; left: 72px; bottom: 34px; display: flex; gap: 10px; }
+  .fields i {
+    width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; font: normal 700 18px 'JetBrains Mono';
+    color: hsl(var(--h) 85% 72%); background: hsl(var(--h) 70% 18% / .85); border: 2px solid hsl(var(--h) 80% 55% / .55);
+  }
+  .pages { position: absolute; right: 70px; top: 92px; width: 380px; height: 470px; }
+  .page {
+    position: absolute; width: 300px; aspect-ratio: 612/792; border-radius: 8px; overflow: hidden; background: #fff;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(140,170,255,.25);
+  }
+  .page canvas { width: 100%; height: 100%; display: block; filter: invert(.92) hue-rotate(180deg); }
+  .page.en { right: 0; top: 0; transform: rotate(6deg); }
+  .page.nl { left: 0; top: 40px; transform: rotate(-7deg); }
+  .badge {
+    position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 7px; font: 700 18px 'JetBrains Mono'; color: #fff;
+  }
+  .en .badge { background: linear-gradient(135deg, #012169, #c8102e); }
+  .nl .badge { left: 12px; right: auto; background: linear-gradient(180deg, #ae1c28 0 33%, #6b7280 33% 66%, #21468b 66%); }
+  .orbit { position: absolute; right: 10px; top: 20px; width: 560px; height: 560px; opacity: .55; }
+  .orbit ellipse { fill: none; stroke-width: 2; }
+  .wave { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; opacity: .5; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <svg class="orbit" viewBox="-280 -280 560 560">
+    <ellipse rx="270" ry="100" stroke="#38bdf8"/>
+    <ellipse rx="270" ry="100" stroke="#a78bfa" transform="rotate(60)"/>
+    <ellipse rx="270" ry="100" stroke="#f472b6" transform="rotate(120)"/>
+  </svg>
+  <svg class="wave" viewBox="0 0 1200 120" preserveAspectRatio="none"><path id="wave" fill="none" stroke="#38bdf8" stroke-width="2"/></svg>
+  <div class="pages">
+    <div class="page nl"><canvas id="c-nl"></canvas><span class="badge">NL</span></div>
+    <div class="page en"><canvas id="c-en"></canvas><span class="badge">EN</span></div>
+  </div>
+  <div class="content">
+    <div class="brand"><img src="../favicon.svg" alt="">Quantum Library</div>
+    <p class="kicker">E = mc² · F = ma · λ = h/p</p>
+    <h1>Every physics formula,<br>one orbit away.</h1>
+    <p class="sub">Worked examples &amp; exercises in English and Dutch — search, read side by side, solve.</p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="fields" id="fields"></div>
+<script type="module">
+  // the wave along the bottom
+  let d = 'M0 70';
+  for (let x = 0; x <= 1200; x += 8) d += ` L${x} ${70 + Math.sin(x / 38) * 26 * (0.5 + 0.5 * Math.sin(x / 300))}`;
+  document.getElementById('wave').setAttribute('d', d);
+
+  const FIELDS = [['F',200],['τ',220],['G',245],['ρ',190],['ΔT',18],['λ',170],['q',48],['B',330],['n',140],['γ',280],['ħ',300],['α',0]];
+  document.getElementById('fields').innerHTML = FIELDS.map(([s, h]) => `<i style="--h:${h}">${s}</i>`).join('');
+
+  const lib = await (await fetch('../data/library.json')).json();
+  const en = lib.docs.find((x) => x.lang === 'en') || lib.docs[0];
+  const pages = lib.docs.reduce((s, x) => s + x.numPages, 0);
+  const fields = new Set(en.topics.map((x) => x.domain)).size;
+  document.getElementById('stats').innerHTML = [
+    [pages, 'pages'], [en.topics.length, 'topics'], [fields, 'fields'], ['EN·NL', 'bilingual'],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+
+  try {
+    const pdfjs = await import('../vendor/pdfjs/pdf.min.mjs');
+    // Run the pdf.js worker code on the main thread: headless Chrome's virtual clock waits for that.
+    globalThis.pdfjsWorker = await import('../vendor/pdfjs/pdf.worker.min.mjs');
+    for (const doc of lib.docs.slice(0, 2)) {
+      const pdf = await pdfjs.getDocument('../' + doc.file).promise;
+      const page = await pdf.getPage(1);
+      const vp = page.getViewport({ scale: 1.2 });
+      const c = document.getElementById('c-' + doc.lang);
+      if (!c) continue;
+      c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    }
+  } catch (e) { console.warn(e); }
+  document.body.dataset.ready = '1';
+</script>
+</body>
+</html>
