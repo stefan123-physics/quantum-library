@@ -1036,7 +1036,7 @@ class Reader {
     if (session !== this.speakSession) return;
     if (!voices.length) {
       this.stopSpeaking();
-      return toast(t('toast.noVoices'));
+      return toast(t(speechHelpKey()));
     }
     const lang = this.doc.lang;
     const voice =
@@ -1055,8 +1055,16 @@ class Reader {
       toast(t('toast.reading', { page: p }));
       for (const sentence of speakableSentences(this.doc.pages[p - 1] || '')) {
         if (session !== this.speakSession) return;
+        let started = false;
         const ok = await new Promise((resolve) => {
           const u = new SpeechSynthesisUtterance(sentence);
+          u.onstart = () => (started = true);
+          // Some engines accept the text but never start (e.g. a broken speech-dispatcher): detect it.
+          if (!this.speechVerified) {
+            setTimeout(() => {
+              if (!started && session === this.speakSession && !speechSynthesis.speaking) resolve('no-start');
+            }, 4000);
+          }
           u.lang = lang === 'nl' ? 'nl-NL' : 'en-GB';
           try {
             if (voice) u.voice = voice;
@@ -1070,10 +1078,11 @@ class Reader {
         if (ok !== true) {
           if (session === this.speakSession) {
             this.stopSpeaking();
-            toast(t('toast.speechError', { error: ok }));
+            toast(ok === 'no-start' ? t(speechHelpKey()) : t('toast.speechError', { error: ok }));
           }
           return;
         }
+        if (started) this.speechVerified = true;
       }
     }
     if (session === this.speakSession) this.stopSpeaking();
@@ -1128,6 +1137,15 @@ function renderReader(doc, page, params) {
 }
 
 /* ------------------------------------------------------------ read aloud */
+
+// Which help text fits this browser when speech does not work.
+function speechHelpKey() {
+  const ua = navigator.userAgent;
+  const linux = /Linux/.test(ua) && !/Android/.test(ua);
+  if (linux && /Chrome|Chromium|Edg|OPR|Brave/.test(ua)) return 'toast.noVoicesChromeLinux';
+  if (linux) return 'toast.noVoicesLinux';
+  return 'toast.noVoices';
+}
 
 // Voices load asynchronously in Chrome; wait briefly for them.
 function loadVoices() {
@@ -1199,7 +1217,7 @@ function setupInstall() {
   const btn = document.getElementById('install-btn');
   const show = (on) => (btn.hidden = !on || isStandalone());
   addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
+    // no preventDefault(): the browser may still offer its own install UI; our button reuses the event
     installPrompt = e;
     show(true);
   });
@@ -1345,7 +1363,7 @@ document.addEventListener('keydown', (e) => {
 /* -------------------------------------------------------------- keyboard */
 
 document.addEventListener('keydown', (e) => {
-  const typing = e.target.closest('input, textarea, select, [contenteditable]');
+  const typing = e.target.closest?.('input, textarea, select, [contenteditable]');
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     return palette.open ? palette.close() : openPalette();

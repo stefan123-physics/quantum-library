@@ -1,7 +1,7 @@
 // Service worker: makes the installed app open instantly and work offline.
 // - code & data (HTML, JS, CSS, JSON, manifest): network first, cached copy when offline
 // - PDFs, pdf.js, icons, fonts: served from cache, refreshed in the background
-const CACHE = 'quantum-library-v1';
+const CACHE = 'quantum-library-v2';
 const SHELL = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest', 'favicon.svg',
   'js/app.js', 'js/i18n.js', 'js/store.js', 'js/search.js', 'js/pdf.js', 'js/lab.js', 'js/bg.js',
@@ -34,7 +34,11 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
+          // clone now, before the page starts reading the body
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
           return res;
         })
         .catch(() => caches.match(req).then((r) => r || caches.match('index.html'))),
@@ -48,7 +52,10 @@ self.addEventListener('fetch', (e) => {
       const cached = await c.match(req);
       const network = fetch(req)
         .then((res) => {
-          if (res.ok || res.type === 'opaque') c.put(req, res.clone());
+          if (res.ok || res.type === 'opaque') {
+            const copy = res.clone();
+            c.put(req, copy).catch(() => {});
+          }
           return res;
         })
         .catch(() => cached);
